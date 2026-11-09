@@ -829,6 +829,35 @@ async function showDetails(id, vod_name, sourceCode) {
         
         const data = await response.json();
         
+        // 服务端详情没有返回剧集时，直接通过代理请求源站详情接口兜底
+        if ((!data.episodes || data.episodes.length === 0) && API_SITES[sourceCode]) {
+            const site = API_SITES[sourceCode];
+            const detailBase = site.detail || site.api;
+            const detailUrl = detailBase + API_CONFIG.detail.path + encodeURIComponent(id);
+            try {
+                const detailResp = await fetch(PROXY_URL + encodeURIComponent(detailUrl), {
+                    headers: API_CONFIG.detail.headers
+                });
+                const detailJson = await detailResp.json();
+                const video = detailJson.list && detailJson.list[0];
+                if (video && video.vod_play_url) {
+                    const parseGroup = group => group.split('#').map(item => {
+                        const sep = item.indexOf('$');
+                        return sep >= 0 ? item.slice(sep + 1).trim() : '';
+                    }).filter(url => /^https?:\/\//.test(url));
+                    const groups = String(video.vod_play_url).split('$$$').map(parseGroup).filter(g => g.length > 0);
+                    // 优先使用 m3u8 直链的播放组
+                    const m3u8Group = groups.find(g => g.some(url => /\.m3u8(\?|$)/i.test(url)));
+                    data.episodes = m3u8Group || groups[0] || [];
+                    if (!data.videoInfo || !data.videoInfo.source_name) {
+                        data.videoInfo = { ...(data.videoInfo || {}), source_name: site.name };
+                    }
+                }
+            } catch (e) {
+                console.error('详情兜底获取失败:', e);
+            }
+        }
+        
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('modalTitle');
         const modalContent = document.getElementById('modalContent');
