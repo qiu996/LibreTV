@@ -5,12 +5,102 @@ const DEFAULT_SELECTED_APIS = Object.keys(API_SITES).filter(key => !API_SITES[ke
 // 成人资源选择前需要密码验证时，暂存待应用的选中操作
 let pendingAdultSelection = null;
 
-// 当前是否已通过密码验证（未启用密码保护时视为已通过）
+// 是否配置了成人资源密码
+function isAdultPasswordEnabled() {
+    return typeof ADULT_PASSWORD_HASH === 'string' &&
+        ADULT_PASSWORD_HASH.length === 64 &&
+        !/^0+$/.test(ADULT_PASSWORD_HASH);
+}
+
+// 当前是否已通过成人资源密码验证（未配置密码时视为已通过）
 function canSelectAdult() {
-    if (typeof window.isPasswordProtected !== 'function' || typeof window.isPasswordVerified !== 'function') {
-        return true;
+    if (!isAdultPasswordEnabled()) return true;
+    return localStorage.getItem(ADULT_PASSWORD_KEY) === ADULT_PASSWORD_HASH;
+}
+
+// 计算 SHA-256（优先复用 password.js 的实现）
+async function hashAdultPassword(text) {
+    if (typeof sha256 === 'function') return sha256(text);
+    if (typeof window._jsSha256 === 'function') return window._jsSha256(text);
+    if (window.crypto && crypto.subtle && crypto.subtle.digest) {
+        const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+        return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
-    return !window.isPasswordProtected() || window.isPasswordVerified();
+    throw new Error('No SHA-256 implementation available.');
+}
+
+// 创建成人资源密码弹窗（仅在需要时创建一次）
+function ensureAdultPasswordModal() {
+    if (document.getElementById('adultPasswordModal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'adultPasswordModal';
+    modal.className = 'fixed inset-0 bg-black/95 hidden items-center justify-center z-[70]';
+    modal.innerHTML = `
+        <div class="bg-[#111] p-6 rounded-lg w-11/12 max-w-sm border border-[#333]">
+            <h2 class="text-xl font-bold gradient-text mb-3">成人资源验证</h2>
+            <p class="text-gray-400 text-sm mb-3">请输入成人资源访问密码</p>
+            <input type="password" id="adultPasswordInput" autocomplete="new-password"
+                   class="w-full bg-[#111] border border-[#333] text-white px-4 py-2 rounded-lg focus:outline-none focus:border-white"
+                   placeholder="密码...">
+            <p id="adultPasswordError" class="text-red-500 text-sm mt-2 hidden">密码错误，请重试</p>
+            <div class="flex gap-2 mt-4">
+                <button id="adultPasswordSubmit" type="button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">确定</button>
+                <button id="adultPasswordCancel" type="button" class="flex-1 bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded">取消</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector('#adultPasswordInput');
+    modal.querySelector('#adultPasswordSubmit').addEventListener('click', submitAdultPassword);
+    modal.querySelector('#adultPasswordCancel').addEventListener('click', function() {
+        pendingAdultSelection = null;
+        hideAdultPasswordModal();
+    });
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') submitAdultPassword();
+    });
+}
+
+function showAdultPasswordModal() {
+    ensureAdultPasswordModal();
+    const modal = document.getElementById('adultPasswordModal');
+    const error = document.getElementById('adultPasswordError');
+    const input = document.getElementById('adultPasswordInput');
+    if (error) error.classList.add('hidden');
+    if (input) input.value = '';
+    modal.style.display = 'flex';
+    setTimeout(() => input && input.focus(), 100);
+}
+
+function hideAdultPasswordModal() {
+    const modal = document.getElementById('adultPasswordModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// 验证成人资源密码
+async function submitAdultPassword() {
+    const input = document.getElementById('adultPasswordInput');
+    const error = document.getElementById('adultPasswordError');
+    const value = input ? input.value.trim() : '';
+
+    try {
+        const hash = await hashAdultPassword(value);
+        if (hash === ADULT_PASSWORD_HASH) {
+            localStorage.setItem(ADULT_PASSWORD_KEY, ADULT_PASSWORD_HASH);
+            hideAdultPasswordModal();
+            applyPendingAdultSelection();
+            return;
+        }
+    } catch (err) {
+        console.error('验证成人资源密码失败:', err);
+    }
+
+    if (error) error.classList.remove('hidden');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
 }
 
 // 密码验证通过后，应用之前暂存的成人资源选中操作
@@ -92,9 +182,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置事件监听器
     setupEventListeners();
-
-    // 密码验证通过后，应用暂存的成人资源选中操作
-    document.addEventListener('passwordVerified', applyPendingAdultSelection);
     
     // 初始检查成人API选中状态
     setTimeout(checkAdultAPIsSelected, 100);
@@ -190,7 +277,7 @@ function addAdultAPI() {
                 if (this.checked && !canSelectAdult()) {
                     this.checked = false;
                     pendingAdultSelection = { type: 'api', apiKey: apiKey };
-                    if (typeof showPasswordModal === 'function') showPasswordModal();
+                    showAdultPasswordModal();
                     return;
                 }
                 updateSelectedAPIs();
@@ -425,7 +512,7 @@ function selectAllAPIs(selectAll = true, excludeAdult = false) {
     
     if (adultNeedsUnlock) {
         pendingAdultSelection = { type: 'all' };
-        if (typeof showPasswordModal === 'function') showPasswordModal();
+        showAdultPasswordModal();
     }
 
     updateSelectedAPIs();
