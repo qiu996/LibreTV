@@ -22,7 +22,7 @@ const SITE_CONFIG = {
 // API站点配置
 const API_SITES = {
     dyttzy: {
-        api: 'https://www.hongniuzy.com',
+        api: 'https://caiji.dyttzyapi.com',
         name: '电影天堂资源',
         detail: 'http://caiji.dyttzyapi.com',
     },
