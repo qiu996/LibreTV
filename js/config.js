@@ -10,6 +10,11 @@ const PASSWORD_CONFIG = {
     verificationTTL: 90 * 24 * 60 * 60 * 1000,  // 验证有效期（90天，约3个月）
 };
 
+// 成人资源独立访问密码（SHA-256 哈希，留空则不校验）
+// 生成方式：node -e "console.log(require('crypto').createHash('sha256').update('你的密码').digest('hex'))"
+const ADULT_PASSWORD_HASH = '4ed1c35f08ae80e0f6bda4abeeb02e3c16457ed7cc85fc998f24a85969a53ce1';
+const ADULT_PASSWORD_KEY = 'adultPasswordVerified';
+
 // 网站信息配置
 const SITE_CONFIG = {
     name: 'LibreTV',
@@ -240,5 +245,4 @@ const CUSTOM_API_CONFIG = {
 };
 
 // 隐藏内置黄色采集站API的变量
-const HIDE_BUILTIN_ADULT_APIS = false;//开启
-//const HIDE_BUILTIN_ADULT_APIS = true;//关闭
+const HIDE_BUILTIN_ADULT_APIS = false;
