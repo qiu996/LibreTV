@@ -116,8 +116,8 @@ function initAPICheckboxes() {
 
 // 添加成人API列表
 function addAdultAPI() {
-    // 仅在隐藏设置为false时添加成人API组
-    if (!HIDE_BUILTIN_ADULT_APIS && (localStorage.getItem('yellowFilterEnabled') === 'false')) {
+    // 默认显示成人资源组，但不默认选中
+    if (!HIDE_BUILTIN_ADULT_APIS) {
         const container = document.getElementById('apiCheckboxes');
 
         // 添加成人API组标题
