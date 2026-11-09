@@ -2,6 +2,36 @@
 const DEFAULT_EXCLUDED_APIS = ['dyttzy'];
 const DEFAULT_SELECTED_APIS = Object.keys(API_SITES).filter(key => !API_SITES[key].adult && !DEFAULT_EXCLUDED_APIS.includes(key));
 
+// 成人资源选择前需要密码验证时，暂存待应用的选中操作
+let pendingAdultSelection = null;
+
+// 当前是否已通过密码验证（未启用密码保护时视为已通过）
+function canSelectAdult() {
+    if (typeof window.isPasswordProtected !== 'function' || typeof window.isPasswordVerified !== 'function') {
+        return true;
+    }
+    return !window.isPasswordProtected() || window.isPasswordVerified();
+}
+
+// 密码验证通过后，应用之前暂存的成人资源选中操作
+function applyPendingAdultSelection() {
+    if (!pendingAdultSelection) return;
+    const pending = pendingAdultSelection;
+    pendingAdultSelection = null;
+
+    if (pending.type === 'all') {
+        document.querySelectorAll('#apiCheckboxes input.api-adult').forEach(cb => {
+            cb.checked = true;
+        });
+    } else {
+        const checkbox = document.getElementById('api_' + pending.apiKey);
+        if (checkbox) checkbox.checked = true;
+    }
+
+    updateSelectedAPIs();
+    checkAdultAPIsSelected();
+}
+
 // 全局变量
 let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || 'null');
 if (!Array.isArray(selectedAPIs)) {
@@ -62,6 +92,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置事件监听器
     setupEventListeners();
+
+    // 密码验证通过后，应用暂存的成人资源选中操作
+    document.addEventListener('passwordVerified', applyPendingAdultSelection);
     
     // 初始检查成人API选中状态
     setTimeout(checkAdultAPIsSelected, 100);
@@ -153,6 +186,13 @@ function addAdultAPI() {
             
             // 添加事件监听器
             checkbox.querySelector('input').addEventListener('change', function() {
+                // 勾选成人资源前需要先通过密码验证
+                if (this.checked && !canSelectAdult()) {
+                    this.checked = false;
+                    pendingAdultSelection = { type: 'api', apiKey: apiKey };
+                    if (typeof showPasswordModal === 'function') showPasswordModal();
+                    return;
+                }
                 updateSelectedAPIs();
                 checkAdultAPIsSelected();
             });
@@ -370,15 +410,24 @@ function updateSelectedApiCount() {
 // 全选或取消全选API
 function selectAllAPIs(selectAll = true, excludeAdult = false) {
     const checkboxes = document.querySelectorAll('#apiCheckboxes input[type="checkbox"]');
+    // 全选时若包含成人资源，同样需要先通过密码验证
+    const adultNeedsUnlock = selectAll && !excludeAdult &&
+        document.querySelector('#apiCheckboxes input.api-adult') && !canSelectAdult();
     
     checkboxes.forEach(checkbox => {
-        if (excludeAdult && checkbox.classList.contains('api-adult')) {
+        const isAdult = checkbox.classList.contains('api-adult');
+        if (isAdult && (excludeAdult || adultNeedsUnlock)) {
             checkbox.checked = false;
         } else {
             checkbox.checked = selectAll;
         }
     });
     
+    if (adultNeedsUnlock) {
+        pendingAdultSelection = { type: 'all' };
+        if (typeof showPasswordModal === 'function') showPasswordModal();
+    }
+
     updateSelectedAPIs();
     checkAdultAPIsSelected();
 }
