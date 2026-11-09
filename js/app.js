@@ -1,5 +1,12 @@
+// 默认选中除“电影天堂资源”外的所有普通资源
+const DEFAULT_EXCLUDED_APIS = ['dyttzy'];
+const DEFAULT_SELECTED_APIS = Object.keys(API_SITES).filter(key => !API_SITES[key].adult && !DEFAULT_EXCLUDED_APIS.includes(key));
+
 // 全局变量
-let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || '["tyyszy","dyttzy", "bfzy", "ruyi"]'); // 默认选中天涯资源、暴风资源和如意资源
+let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || 'null');
+if (!Array.isArray(selectedAPIs)) {
+    selectedAPIs = [...DEFAULT_SELECTED_APIS];
+}
 let customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]'); // 存储自定义API列表
 
 // 添加当前播放的集数索引
@@ -13,22 +20,9 @@ let episodesReversed = false;
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
-    // 初始化API复选框
-    initAPICheckboxes();
-    
-    // 初始化自定义API列表
-    renderCustomAPIsList();
-    
-    // 初始化显示选中的API数量
-    updateSelectedApiCount();
-    
-    // 渲染搜索历史
-    renderSearchHistory();
-    
-    // 设置默认API选择（如果是第一次加载）
+    // 设置默认API选择（如果是第一次加载）：全选除“电影天堂资源”外的所有普通资源
     if (!localStorage.getItem('hasInitializedDefaults')) {
-        // 仅选择天涯资源、暴风资源和如意资源
-        selectedAPIs = ["tyyszy", "bfzy","dyttzy", "ruyi"];
+        selectedAPIs = [...DEFAULT_SELECTED_APIS];
         localStorage.setItem('selectedAPIs', JSON.stringify(selectedAPIs));
         
         // 默认选中过滤开关
@@ -41,6 +35,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // 标记已初始化默认值
         localStorage.setItem('hasInitializedDefaults', 'true');
     }
+
+    // 初始化API复选框
+    initAPICheckboxes();
+    
+    // 初始化自定义API列表
+    renderCustomAPIsList();
+    
+    // 初始化显示选中的API数量
+    updateSelectedApiCount();
+    
+    // 渲染搜索历史
+    renderSearchHistory();
     
     // 设置黄色内容过滤开关初始状态
     const yellowFilterToggle = document.getElementById('yellowFilterToggle');
